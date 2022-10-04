@@ -1,0 +1,376 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>maze generater</title>
+<script language="javascript" type="text/javascript"
+	src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+<style>
+body {
+	margin: 10px;
+	padding: 10px;
+}
+
+.maze_canvas {
+	width: 300px;
+	height: 300px;
+	border: 1px #666 solid;
+	background: #000;
+}
+</style>
+</head>
+
+<body>
+	<canvas id="maze" class="maze_canvas"></canvas>
+	<!--<textarea id="debug" style="height:290px; width:250px;"></textarea>-->
+
+	<br /> trace count:
+	<input type="text" id="trace_count" value="0" />
+	<br />
+	<input type="button" id="generate_maze" value="Generate" />
+	<p>
+	test on browser IE 9.0.8112.16421, Chome 16.0.912.75 and Firefox 9.0.1<br/>
+		ref: <a href="http://en.wikipedia.org/wiki/File:MAZE_30x20_DFS.ogv">wiki</a>
+	</p>
+</body>
+</html>
+<script type="text/javascript">
+	var CANVAS_WIDTH = 300;
+	var CANVAS_HEIGHT = 300;
+	var BLOCK_SIZE_WIDTH = 10; //10px;
+	var BLOCK_SIZE_HEIGHT = 5; //5px;
+	var depth_first_search = new depth_first_search();;
+	var context;
+	var interval_var;
+	var time_interval = 1;
+
+	$(document).ready(function() {
+		//initial canvas
+		var canvas = document.getElementById("maze");
+		context = canvas.getContext("2d");
+
+		$('#generate_maze').click(function (){
+			//reset
+			depth_first_search.reset();
+			context.fillStyle = "#000000";
+			context.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+			$('#trace_count').val(0);
+			
+			//start position
+			//random
+			var random_start_X = random_number(30)*10;
+			context.fillStyle = "#ffffff";
+			context.fillRect(random_start_X, 0, BLOCK_SIZE_WIDTH, BLOCK_SIZE_HEIGHT);
+			
+			context.fillStyle = "#ffffff";
+			context.fillRect(random_start_X, 5, BLOCK_SIZE_WIDTH, BLOCK_SIZE_HEIGHT);
+			
+			depth_first_search.set_current_position(new Position(random_start_X, 5));				
+			//keep to stack first start
+			depth_first_search.keep_position();
+			//keep flag stack
+			depth_first_search.flag_position();
+				
+			interval_var = setInterval("renderGame();", time_interval);
+			debug("Genarate maze.\r\n");
+		});
+	});
+
+	function renderGame()
+	{
+		//random way
+		depth_first_search.find_move(random_number(11));
+		
+		//check rule
+		var can_move = depth_first_search.check_can_move();
+		
+		if(can_move){
+			//move
+			depth_first_search.move(depth_first_search.new_position);
+			//set curent position 
+			depth_first_search.set_current_position(depth_first_search.new_position);	
+			//keep to stack path move
+			depth_first_search.keep_position();
+			//keep flag stack
+			depth_first_search.flag_position();
+		}else{
+			/*
+			 *check posible way count
+			 *if posible way count == 0
+			 *load stack
+			 */
+			debug(" => can't move.\r\n")
+			
+			//check posible path way
+			depth_first_search.check_posible_path_way();
+			
+			if(depth_first_search.posible_move_way == 0){
+				//dead end and set new position.
+				depth_first_search.new_position_set_from_stack();
+				if(depth_first_search.current_position == undefined){
+					clearInterval(interval_var);
+					depth_first_search.random_end();
+					alert('End genarate.');
+				}
+			}
+		}
+		
+		
+		/*depth_first_search.find_move(random_number(11));
+		//check new way can move ?
+		var can_move = depth_first_search.check_can_move();
+
+		if (can_move) {
+			//check posible path way
+			depth_first_search.check_posible_path_way();
+
+			if (depth_first_search.posible_move_way > 1) {
+				//keep to stack path move
+				depth_first_search.keep_position();
+			}
+
+			//move
+			depth_first_search.move(depth_first_search.new_position);
+			//set curent position 
+			depth_first_search.set_current_position(depth_first_search.new_position);
+		}else{
+			//check posible path way for check dead end.
+			depth_first_search.check_posible_path_way();
+			
+			if(depth_first_search.posible_move_way == 0){
+				//dead end and set new position.
+				depth_first_search.new_position_set_from_stack();
+			}
+			
+		}*/
+	}
+
+	function depth_first_search() {
+		var posible_move_way = 0;
+		var way_stack;
+		var flag_stack
+		var current_position;
+		var new_position;
+		var direction;
+		
+		//Method
+		this.reset = function(){
+			this.posible_move_way = 0;
+			this.way_stack = new Array();
+			this.flag_stack = new Array();
+			this.current_position = null;
+			this.new_position = null;
+			this.direction = '';
+		}
+		
+		this.set_current_position = function(position) {
+			this.current_position = position;
+		}
+
+		this.find_move = function(rnd_number) {
+			this.new_position = new Position();
+			//random for calculate line
+			//return a random integer between 0 and 11
+			//0-2 left
+			//3-5 up
+			//6-8 down
+			//9-11 right		
+
+			//select way
+			if (rnd_number >= 0 && rnd_number <= 2) {
+				//move left
+				this.new_position.X = this.current_position.X
+						- BLOCK_SIZE_WIDTH;
+				this.new_position.Y = this.current_position.Y;
+				this.direction = 'LEFT';
+				debug("random:move left");
+			} else if (rnd_number >= 3 && rnd_number <= 5) {
+				//move up
+				this.new_position.X = this.current_position.X;
+				this.new_position.Y = this.current_position.Y
+						- BLOCK_SIZE_HEIGHT;
+				this.direction = 'UP';
+				debug("random:move up");
+			} else if (rnd_number >= 6 && rnd_number <= 8) {
+				//move down
+				this.new_position.X = this.current_position.X;
+				this.new_position.Y = this.current_position.Y
+						+ BLOCK_SIZE_HEIGHT;
+				this.direction = 'DOWN';
+				debug("random:move down");
+			} else if (rnd_number >= 9 && rnd_number <= 11) {
+				//move right
+				this.new_position.X = this.current_position.X
+						+ BLOCK_SIZE_WIDTH;
+				this.new_position.Y = this.current_position.Y;
+				this.direction = 'RIGHT';
+				debug("random:move right");
+			}
+			
+			debug("["+this.new_position.X+","+this.new_position.Y+"]");
+		}
+
+		this.check_can_move = function() {
+			return check_can_move(this.new_position, this.direction, this.way_stack);
+		}
+
+		this.check_posible_path_way = function() {
+			this.posible_move_way = check_path_way_count(this.current_position, '', this.way_stack);
+		}
+
+		this.keep_position = function() {
+			this.way_stack.push(this.current_position);
+			add_trace_count();
+		}
+		
+		this.flag_position = function() {
+			this.flag_stack.push(this.current_position);
+		}
+
+		this.move = function(position) {
+			//fill rectangle new position
+			context.fillRect(position.X, position.Y, BLOCK_SIZE_WIDTH,
+					BLOCK_SIZE_HEIGHT);
+			debug(" => move.\r\n")
+		}
+		
+		this.new_position_set_from_stack = function(){
+			this.current_position = this.flag_stack.pop();
+		}
+
+		this.random_end = function(){		
+			var random_end_X;
+			while(true){
+				random_end_X = random_number(30)*10;
+				if(check_position_in_array(new Position(random_end_X, 140), this.way_stack)){
+					context.fillStyle = "#ffffff";
+					context.fillRect(random_end_X, (CANVAS_HEIGHT / 2) - BLOCK_SIZE_HEIGHT, BLOCK_SIZE_WIDTH, BLOCK_SIZE_HEIGHT);
+					return;
+				}
+			}
+			
+		}
+	}
+
+	////////////////////////////////////////////////////////////////
+
+	//Position Class
+	function Position(x, y) {
+		this.X = x;
+		this.Y = y;
+	}
+
+	//random number
+	function random_number(num) {
+		return Math.floor(Math.random() * (num - 1));
+	}
+
+	//check can move
+	function check_can_move(position, direction, way_stack) {
+		//same path
+		if (check_position_in_array(position, way_stack) || position.X <= 0 
+				|| position.X >= CANVAS_WIDTH - BLOCK_SIZE_WIDTH 
+				|| position.Y <= 0 
+				|| position.Y >= (CANVAS_HEIGHT / 2) - BLOCK_SIZE_HEIGHT) {
+			return false;
+		}
+		
+		//move to be close same path 1 block
+		var be_close_side_position_check = new Position();
+		
+		//be close left
+		if(direction != 'RIGHT'){
+			be_close_side_position_check.X = position.X - BLOCK_SIZE_WIDTH;
+			be_close_side_position_check.Y = position.Y;
+			if(check_position_in_array(be_close_side_position_check, way_stack)){
+				return false;
+			}
+		}
+		
+		//be close top
+		if(direction != 'DOWN'){
+			be_close_side_position_check.X = position.X;
+			be_close_side_position_check.Y = position.Y - BLOCK_SIZE_HEIGHT;
+			if(check_position_in_array(be_close_side_position_check, way_stack)){
+				return false;
+			}
+		}
+		
+		//be close bottom
+		if(direction != 'UP'){
+			be_close_side_position_check.X = position.X;
+			be_close_side_position_check.Y = position.Y + BLOCK_SIZE_HEIGHT;
+			if(check_position_in_array(be_close_side_position_check, way_stack)){
+				return false;
+			}
+		}
+		
+		//be close right
+		if(direction != 'LEFT'){
+			be_close_side_position_check.X = position.X + BLOCK_SIZE_WIDTH;
+			be_close_side_position_check.Y = position.Y;
+			if(check_position_in_array(be_close_side_position_check, way_stack)){
+				return false;
+			}
+		}
+		
+
+		return true;
+	}
+
+	//check path way function
+	function check_path_way_count(position, direction, stack_way) {
+		var position_check = new Position();
+		var way_count = 0;
+		
+		//check near left
+		position_check.X = position.X - BLOCK_SIZE_WIDTH;
+		position_check.Y = position.Y;
+		if (check_can_move(position_check, 'LEFT', stack_way)){
+			way_count++;
+		}
+			
+		//check near up
+		position_check.X = position.X;
+		position_check.Y = position.Y - BLOCK_SIZE_HEIGHT;
+		if (check_can_move(position_check, 'UP', stack_way)){
+			way_count++;
+		}
+			
+		//check near down
+		position_check.X = position.X;
+		position_check.Y = position.Y + BLOCK_SIZE_HEIGHT;
+		if (check_can_move(position_check, 'DOWN', stack_way)){
+			way_count++;
+		}
+			
+		//check near right
+		position_check.X = position.X + BLOCK_SIZE_WIDTH;
+		position_check.Y = position.Y;
+		if (check_can_move(position_check, 'RIGHT', stack_way)){
+			way_count++;
+		}
+
+		return way_count;
+	}
+
+	function check_position_in_array(position, stack) {
+		for (i = 0; i < stack.length; i++) {
+			if (stack[i].X == position.X && stack[i].Y == position.Y) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+	
+	function add_trace_count(){
+		var count = parseInt($('#trace_count').val(), 10);
+		$('#trace_count').val(++count);
+	}
+	
+	function debug(text){		
+		//var old_text = $('#debug').val();
+		//$('#debug').val(old_text + text);
+	}
+</script>
